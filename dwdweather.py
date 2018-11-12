@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 # (c) 2014 Marian Steinbach, MIT licensed
+from __future__ import print_function
+
 import os
 import re
 import sys
@@ -8,7 +10,14 @@ import json
 import math
 import sqlite3
 import argparse
-import StringIO
+
+if sys.version[0] == '2':
+    from StringIO import StringIO as sio
+else:
+    from io import StringIO as sio
+    from io import BytesIO as bio
+
+
 import traceback
 from ftplib import FTP
 from zipfile import ZipFile
@@ -471,8 +480,9 @@ class DwdWeather(object):
                     continue
                 if self.verbosity > 1:
                     print("Reading file %s/%s" % (path, filename))
-                f = StringIO.StringIO()
-                ftp.retrbinary('RETR ' + filename, f.write)
+                f = bio()
+
+                ftp.retrbinary("RETR {}".format(filename), f.write)
                 self.import_station(f.getvalue())
                 f.close()
 
@@ -482,10 +492,10 @@ class DwdWeather(object):
         Takes the content of one station metadata file
         and imports it into the database
         """
+        content = content.decode("latin1")
         content = content.strip()
         content = content.replace("\r", "")
         content = content.replace("\n\n", "\n")
-        content = content.decode("latin1")
         insert_sql = """INSERT OR IGNORE INTO stations
             (station_id, date_start, date_end, geo_lon, geo_lat, height, name, state)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)"""
@@ -848,7 +858,7 @@ class DwdWeather(object):
         """
         Return stations list as CSV
         """
-        csvfile = StringIO.StringIO()
+        csvfile = sio()
         # assemble field list
         headers = ["station_id", "date_start", "date_end",
             "geo_lon", "geo_lat", "height", "name"]
@@ -865,7 +875,11 @@ class DwdWeather(object):
                     val = str(val)
                 elif type(val) == float:
                     val = "%.4f" % val
-                elif type(val) == unicode:
+                # elif hasattr(val,"encode"):
+                #     val = val.encode("utf8")
+                elif sys.version[0] == '2' and type(val) == unicode:
+                    val = val.encode("utf8")
+                elif sys.version[0] == '3' and type(val) == type(bytes):
                     val = val.encode("utf8")
                 row.append(val)
             writer.writerow(row)
@@ -878,7 +892,7 @@ def main():
 
     def get_station(args):
         dw = DwdWeather(cachepath=args.cachepath, verbosity=args.verbosity)
-        print json.dumps(dw.nearest_station(lon=args.lon, lat=args.lat), indent=4)
+        print(json.dumps(dw.nearest_station(lon=args.lon, lat=args.lat), indent=4))
 
     def get_stations(args):
         dw = DwdWeather(cachepath=args.cachepath, verbosity=args.verbosity)
@@ -890,7 +904,7 @@ def main():
         elif args.type == "plain":
             output = dw.stations_csv(delimiter="\t")
         if args.output_path is None:
-            print output
+            print(output)
         else:
             f = open(args.output_path, "wb")
             f.write(output)
@@ -899,7 +913,7 @@ def main():
     def get_weather(args):
         hour = datetime.strptime(str(args.hour), "%Y%m%d%H")
         dw = DwdWeather(cachepath=args.cachepath, verbosity=args.verbosity)
-        print json.dumps(dw.query(args.station_id, hour), indent=4, sort_keys=True)
+        print(json.dumps(dw.query(args.station_id, hour), indent=4, sort_keys=True))
 
     argparser = argparse.ArgumentParser(prog="dwdweather",
         description="Get weather information for Germany.")
@@ -910,7 +924,8 @@ def main():
         help="Path to cache directory. Defaults to .dwd-weather in user's home dir.",
         default=os.path.expanduser("~") + os.sep + ".dwd-weather")
 
-    subparsers = argparser.add_subparsers(title="Actions", help="Main client actions.")
+    subparsers = argparser.add_subparsers(title="Actions",
+                                          help="Main client actions.")
 
     def float_range(min, max):
         def check_range(x):
@@ -945,8 +960,17 @@ def main():
     parser_weather.add_argument("station_id", type=int, help="Numeric ID of the station, e.g. 2667")
     parser_weather.add_argument("hour", type=int, help="Time in the form of YYYYMMDDHH")
 
-    args = argparser.parse_args()
-    args.func(args)
+    if sys.version[0] == '2':
+        args = argparser.parse_args()
+        args.func(args)
+    else:
+        args = argparser.parse_args()
+        if hasattr(args,"func"):
+            args.func(args)
+        else:
+            print("Error - no action provided!")
+            argparser.print_help()
+            sys.exit(1)
 
 
 if __name__ == "__main__":
