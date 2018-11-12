@@ -678,6 +678,9 @@ class DwdWeather(object):
         f = open(path, "rb")
         content = f.read()
         f.close()
+        if sys.version[0] == '3' and type(content) == type(bytes):
+            content = content.decode('utf-8')
+            
         content = content.strip()
 
         # Create SQL template
@@ -691,7 +694,8 @@ class DwdWeather(object):
         insert_datasets = []
         update_datasets = []
         count = 0
-        for line in content.split("\n"):
+        
+        for line in content.split('\n'):
             count += 1
             line = line.strip()
             if line == "" or line == '\x1a':
