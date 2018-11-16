@@ -11,7 +11,7 @@ import math
 import sqlite3
 import argparse
 
-if sys.version[0] == '2':
+if sys.version_info[0] == 2:
     from StringIO import StringIO as sio
 else:
     from io import StringIO as sio
@@ -678,7 +678,7 @@ class DwdWeather(object):
         f = open(path, "rb")
         content = f.read()
         f.close()
-        if sys.version[0] == '3' and type(content) == type(bytes):
+        if sys.version_info[0] == 3 and type(content) == type(bytes):
             content = content.decode('utf-8')
             
         content = content.strip()
@@ -865,7 +865,7 @@ class DwdWeather(object):
         csvfile = sio()
         # assemble field list
         headers = ["station_id", "date_start", "date_end",
-            "geo_lon", "geo_lat", "height", "name"]
+                   "geo_lon", "geo_lat", "height", "name","state"]
         writer = csv.writer(csvfile, delimiter=delimiter, quoting=csv.QUOTE_MINIMAL)
         writer.writerow(headers)
         stations = self.stations()
@@ -881,9 +881,9 @@ class DwdWeather(object):
                     val = "%.4f" % val
                 # elif hasattr(val,"encode"):
                 #     val = val.encode("utf8")
-                elif sys.version[0] == '2' and type(val) == unicode:
+                elif sys.version_info[0] == 2 and type(val) == unicode:
                     val = val.encode("utf8")
-                elif sys.version[0] == '3' and type(val) == type(bytes):
+                elif sys.version_info[0] == 3 and type(val) == type(bytes):
                     val = val.encode("utf8")
                 row.append(val)
             writer.writerow(row)
@@ -901,12 +901,20 @@ def main():
     def get_stations(args):
         dw = DwdWeather(cachepath=args.cachepath, verbosity=args.verbosity)
         output = ""
+
+        
+        if args.type == "csv":
+            output = dw.stations_csv()
+        if args.type == "plain":
+            output = dw.stations_csv(delimiter="\t")
+        if args.type in ["csv","plain"]:
+            matchrex = re.compile(args.rows_matching)
+            splitted = [ item for item in output.split('\n') if matchrex.search(item) ]
+            output = '\n'.join(splitted)
+
         if args.type == "geojson":
             output = dw.stations_geojson()
-        elif args.type == "csv":
-            output = dw.stations_csv()
-        elif args.type == "plain":
-            output = dw.stations_csv(delimiter="\t")
+            
         if args.output_path is None:
             print(output)
         else:
@@ -955,6 +963,11 @@ def main():
     parser_stations.add_argument("-t", "--type", dest="type",
         choices=["geojson", "csv", "plain"], default="plain",
         help="Export format")
+    parser_stations.add_argument("-r", "--rows-matching",
+                                 dest="rows_matching",
+                                 default=None,
+                                 type=str,
+                                 help="regex to filter out and only show specific rows (only works in csv or plain mode)")
     parser_stations.add_argument("-f", "--file", type=str, dest="output_path",
         help="Export file path. If not given, STDOUT is used.")
 
@@ -964,7 +977,7 @@ def main():
     parser_weather.add_argument("station_id", type=int, help="Numeric ID of the station, e.g. 2667")
     parser_weather.add_argument("hour", type=int, help="Time in the form of YYYYMMDDHH")
 
-    if sys.version[0] == '2':
+    if sys.version_info[0] == 2:
         args = argparser.parse_args()
         args.func(args)
     else:
